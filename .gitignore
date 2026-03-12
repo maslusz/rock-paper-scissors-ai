@@ -1,0 +1,41 @@
+# Python byte-compiled / optimised / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Trained model files (large binaries – store elsewhere)
+models/*.h5
+models/*.keras
+
+# Dataset images (store elsewhere or use a separate download script)
+dataset/train/rock/*.jpg
+dataset/train/paper/*.jpg
+dataset/train/scissors/*.jpg
+dataset/val/rock/*.jpg
+dataset/val/paper/*.jpg
+dataset/val/scissors/*.jpg
+dataset/test/rock/*.jpg
+dataset/test/paper/*.jpg
+dataset/test/scissors/*.jpg
+dataset/train/rock/*.png
+dataset/train/paper/*.png
+dataset/train/scissors/*.png
+dataset/val/rock/*.png
+dataset/val/paper/*.png
+dataset/val/scissors/*.png
+dataset/test/rock/*.png
+dataset/test/paper/*.png
+dataset/test/scissors/*.png
+
+# Jupyter notebooks checkpoints
+.ipynb_checkpoints/
+
+# IDE / OS artefacts
+.DS_Store
+.idea/
+.vscode/
