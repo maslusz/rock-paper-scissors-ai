@@ -1,0 +1,11 @@
+CNN:
+https://www.kaggle.com/datasets/adilshamim8/rock-paper-scissors
+
+https://www.kaggle.com/datasets/drgfreeman/rockpaperscissors
+
+https://www.kaggle.com/datasets/alexandredj/rock-paper-scissors-dataset
+
+YOLO:
+https://www.kaggle.com/datasets/hectorandac/rock-paper-scissors-yolo-annotated
+
+https://www.kaggle.com/datasets/cubeai/rock-paper-scissors-detection-for-yolov8
