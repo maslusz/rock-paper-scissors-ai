@@ -1,4 +1,4 @@
-path: ./data/hectorandac_rps_yolo/RPS_YOLO_Annotated
+path: data/hectorandac_rps_yolo/RPS_YOLO_Annotated
 train: images/train
 val: images/val
 test: images/test
