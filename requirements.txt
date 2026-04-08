@@ -1,0 +1,7 @@
+kaggle
+ultralytics
+opencv-python
+scikit-learn
+matplotlib
+numpy
+pandas
