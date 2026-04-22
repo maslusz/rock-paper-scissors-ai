@@ -1,21 +1,16 @@
 from pathlib import Path
-import subprocess
 import sys
+from ultralytics import YOLO
 
 
 def main() -> int:
     root_dir = Path(__file__).resolve().parent.parent
-    model = "runs/detect/train/weights/best.pt"
-    source = "data/hectorandac_rps_yolo/RPS_YOLO_Annotated/images/test"
+    model_path = root_dir / "runs" / "detect" / "train" / "weights" / "best.pt"
+    source = root_dir / "data" / "hectorandac_rps_yolo" / "RPS_YOLO_Annotated" / "images" / "test"
 
-    cmd = [
-        "yolo",
-        "detect",
-        "predict",
-        f"model={model}",
-        f"source={source}",
-    ]
-    return subprocess.run(cmd, cwd=root_dir).returncode
+    detector = YOLO(model_path)
+    detector.predict(source=str(source), project=str(root_dir / "runs" / "detect"))
+    return 0
 
 
 if __name__ == "__main__":

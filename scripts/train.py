@@ -1,6 +1,6 @@
 from pathlib import Path
-import subprocess
 import sys
+from ultralytics import YOLO
 
 
 def main() -> int:
@@ -9,16 +9,14 @@ def main() -> int:
     epochs = 30
     imgsz = 640
 
-    cmd = [
-        "yolo",
-        "detect",
-        "train",
-        f"data={root_dir / 'configs' / 'dataset-rps.yaml'}",
-        f"model={model}",
-        f"epochs={epochs}",
-        f"imgsz={imgsz}",
-    ]
-    return subprocess.run(cmd, cwd=root_dir).returncode
+    detector = YOLO(model)
+    detector.train(
+        data=str(root_dir / "configs" / "dataset-rps.yaml"),
+        epochs=epochs,
+        imgsz=imgsz,
+        project=str(root_dir / "runs" / "detect"),
+    )
+    return 0
 
 
 if __name__ == "__main__":
