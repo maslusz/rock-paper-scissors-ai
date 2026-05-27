@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
 from ultralytics import YOLO
@@ -11,12 +12,22 @@ def resolve_model_name() -> str:
     return pretrained_weights if Path(pretrained_weights).exists() else fallback_architecture
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Trenuje model klasyfikacyjny RPS.")
+    parser.add_argument("--model", default=None, help="Model bazowy lub plik wag.")
+    parser.add_argument("--epochs", type=int, default=30, help="Liczba epok treningu.")
+    parser.add_argument("--imgsz", type=int, default=224, help="Rozmiar obrazu treningowego.")
+    parser.add_argument("--batch", type=int, default=16, help="Rozmiar batcha.")
+    parser.add_argument("--name", default="train", help="Nazwa katalogu run w runs/classify.")
+    parser.add_argument("--device", default=None, help="Urzadzenie treningu, np. cpu, mps albo 0.")
+    return parser.parse_args()
+
+
 def main() -> int:
+    args = parse_args()
     root_dir = Path(__file__).resolve().parent.parent
     dataset_dir = root_dir / "data" / "rps_classification"
-    model = resolve_model_name()
-    epochs = 30
-    imgsz = 224
+    model = args.model or resolve_model_name()
 
     if not dataset_dir.exists():
         print(
@@ -34,9 +45,12 @@ def main() -> int:
     classifier = YOLO(model)
     classifier.train(
         data=str(dataset_dir),
-        epochs=epochs,
-        imgsz=imgsz,
+        epochs=args.epochs,
+        imgsz=args.imgsz,
+        batch=args.batch,
         project=str(root_dir / "runs" / "classify"),
+        name=args.name,
+        device=args.device,
     )
     return 0
 

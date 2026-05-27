@@ -1,0 +1,10 @@
+.DS_Store
+.vscode
+__pycache__
+data
+runs/classify/train/*
+!runs/classify/train/weights/
+!runs/classify/train/weights/**
+runs/detect/train_full/*
+!runs/detect/train_full/weights/
+!runs/detect/train_full/weights/**
