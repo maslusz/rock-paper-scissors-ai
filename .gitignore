@@ -8,3 +8,4 @@ runs/classify/train/*
 runs/detect/train_full/*
 !runs/detect/train_full/weights/
 !runs/detect/train_full/weights/**
+.gitignore
