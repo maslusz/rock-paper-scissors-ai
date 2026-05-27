@@ -19,7 +19,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Realtime rozpoznawanie gestu z kamery: detekcja ROI i klasyfikacja."
     )
-    parser.add_argument("--camera-index", type=int, default=0, help="Indeks kamery OpenCV.")
+    parser.add_argument("--camera-index", type=int, default=1, help="Indeks kamery OpenCV.")
     parser.add_argument("--device", default="mps", help="Urzadzenie YOLO, np. mps albo cpu.")
     parser.add_argument("--detect-imgsz", type=int, default=640, help="Rozmiar obrazu detekcji.")
     parser.add_argument(
