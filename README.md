@@ -204,6 +204,20 @@ python scripts/val_classify.py --model runs/classify/merged_classify/weights/bes
 python scripts/predict_classify.py --batch 32 --imgsz 224 --device mps
 ```
 
+### 5. Zbieranie własnych zdjęć (Personalizacja modelu)
+
+Jeśli model ma trudności z Twoją specyficzną pozą, możesz dołożyć własne próbki do zbioru za pomocą interaktywnego skryptu:
+```bash
+python scripts/collect_custom_data.py
+```
+**Jak to działa:**
+- Skrypt otwiera kamerę z kwadratem ROI dokładnie w tym samym miejscu, co w grze.
+- **Klawisze P, R, S:** Pozwalają na natychmiastową zmianę aktywnej klasy docelowej (**Paper**, **Rock**, **Scissors**), co pozwala zachować zbalansowany zbiór danych.
+- **SPACJA:** Zapisuje wycinek dłoni z ROI, automatycznie przeskalowuje go do `224x224 px` i losowo dzieli do folderów `train`, `val` lub `test` z unikalnymi nazwami.
+- **Q:** Zamyka program.
+
+Po zebraniu próbek (np. po 30 dla każdej klasy) wystarczy ponownie uruchomić trening klasyfikatora.
+
 ---
 
 ## Integracja z kamerą (Zoptymalizowana ergonomia)
@@ -234,13 +248,13 @@ python scripts/camera_recognize.py --use-classifier --debug --device mps
 
 ---
 
-## Instrukcja dla Zespołu (Kolega pracujący na innym komputerze)
+## Instrukcja dla Zespołu
 
 Dzięki profesjonalnej konfiguracji `.gitignore`, **Twoi koledzy z zespołu NIE muszą uruchamiać procesu uczenia ani pobierać danych na nowo!** 
 
 Czysty plik `.gitignore` filtruje gigantyczne dane treningowe i surowe zbiory danych, ale **automatycznie zachowuje i śledzi wagi modeli `best.pt`** wewnątrz folderu `runs/`.
 
-### Szybki start dla kolegi (Plug & Play):
+### Szybki start (Plug & Play):
 1. **Sklonować repozytorium** z Twojego gita (będzie od razu zawierać najlepsze, wyuczone wagi w folderze `runs/`).
 2. **Przygotować środowisko lokalne**:
    ```bash
