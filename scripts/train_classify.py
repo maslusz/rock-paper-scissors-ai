@@ -51,6 +51,12 @@ def main() -> int:
         project=str(root_dir / "runs" / "classify"),
         name=args.name,
         device=args.device,
+        erasing=0.4,
+        mixup=0.15,
+        scale=0.6,
+        hsv_h=0.025,
+        hsv_s=0.8,
+        hsv_v=0.6,
     )
     return 0
 

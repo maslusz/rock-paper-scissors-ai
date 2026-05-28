@@ -2,8 +2,8 @@ from pathlib import Path
 from kaggle.api.kaggle_api_extended import KaggleApi
 
 DATASETS = {
-    "hectorandac/rock-paper-scissors-yolo-annotated": "data/hectorandac_rps_yolo",
-    # "cubeai/rock-paper-scissors-detection-for-yolov8": "data/cubeai_rps_yolov8",
+    # "hectorandac/rock-paper-scissors-yolo-annotated": "data/hectorandac_rps_yolo",
+    "cubeai/rock-paper-scissors-detection-for-yolov8": "data/cubeai_rps_yolov8",
     # "adilshamim8/rock-paper-scissors": "data/adilshamim8_rps_xml",
 }
 

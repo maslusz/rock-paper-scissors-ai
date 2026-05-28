@@ -19,7 +19,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Realtime rozpoznawanie gestu z kamery: detekcja ROI i klasyfikacja."
     )
-    parser.add_argument("--camera-index", type=int, default=1, help="Indeks kamery OpenCV.")
+    parser.add_argument("--camera-index", type=int, default=0, help="Indeks kamery OpenCV.")
     parser.add_argument("--device", default="mps", help="Urzadzenie YOLO, np. mps albo cpu.")
     parser.add_argument("--detect-imgsz", type=int, default=640, help="Rozmiar obrazu detekcji.")
     parser.add_argument(
@@ -46,36 +46,47 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--min-detect-conf",
         type=float,
-        default=0.1,
+        default=0.45,
         help="Minimalny confidence dla zachowania bounding boxa.",
     )
     parser.add_argument(
         "--stability-window",
         type=int,
-        default=5,
+        default=7,
         help="Liczba ostatnich klasyfikacji uzywana do stabilizacji gestu.",
     )
     parser.add_argument(
         "--crop-margin",
         type=float,
-        default=0.1,
+        default=0.2,
         help="Dodatkowy margines cropa wzgledem detekcji.",
     )
     parser.add_argument(
         "--no-fallback-roi",
         action="store_true",
-        help="Wylacz staly ROI na srodku kadru, gdy detektor nie znajdzie dloni.",
+        help="Wlacz staly ROI na srodku kadru, gdy detektor nie znajdzie dloni.",
     )
     parser.add_argument(
         "--roi-size",
         type=float,
-        default=0.45,
+        default=0.55,
         help="Rozmiar stalego ROI jako czesc krotszego boku kadru.",
+    )
+    parser.add_argument(
+        "--roi-x-center",
+        type=float,
+        default=0.75,
+        help="Pozycja X srodka stalego ROI (0.5 to srodek, 0.75 to prawa strona).",
     )
     parser.add_argument(
         "--fixed-roi-only",
         action="store_true",
         help="Pomin detektor i zawsze uzywaj stalego ROI na srodku kadru.",
+    )
+    parser.add_argument(
+        "--use-classifier",
+        action="store_true",
+        help="Wlacz dwuetapowy pipeline (detektor + klasyfikator). Bez tej opcji gesty sa klasyfikowane bezpośrednio przez detektor (zalecane).",
     )
     parser.add_argument(
         "--debug",
@@ -101,31 +112,93 @@ def expand_box(
     )
 
 
-def centered_square_roi(width: int, height: int, size_ratio: float) -> tuple[int, int, int, int]:
+def centered_square_roi(width: int, height: int, size_ratio: float, x_center_ratio: float = 0.5) -> tuple[int, int, int, int]:
     side = int(min(width, height) * size_ratio)
-    cx = width // 2
+    cx = int(width * x_center_ratio)
     cy = height // 2
     half = side // 2
+
+    # Zabezpieczenie przed wyjściem poza ekran
+    x1 = cx - half
+    y1 = cy - half
+    x2 = cx + half
+    y2 = cy + half
+
+    if x1 < 0:
+        diff = -x1
+        x1 += diff
+        x2 += diff
+    if x2 > width:
+        diff = x2 - width
+        x1 -= diff
+        x2 -= diff
+    if y1 < 0:
+        diff = -y1
+        y1 += diff
+        y2 += diff
+    if y2 > height:
+        diff = y2 - height
+        y1 -= diff
+        y2 -= diff
+
     return (
-        max(0, cx - half),
-        max(0, cy - half),
-        min(width, cx + half),
-        min(height, cy + half),
+        max(0, int(x1)),
+        max(0, int(y1)),
+        min(width, int(x2)),
+        min(height, int(y2)),
     )
 
 
-def choose_best_box(result, min_conf: float) -> tuple[tuple[int, int, int, int] | None, float]:
+def choose_best_box(result, min_conf: float) -> tuple[tuple[int, int, int, int] | None, float, int | None]:
     boxes = result.boxes
     if boxes is None or len(boxes) == 0:
-        return None, 0.0
+        return None, 0.0, None
 
     best_index = int(boxes.conf.argmax().item())
     best_conf = float(boxes.conf[best_index].item())
     if best_conf < min_conf:
-        return None, best_conf
+        return None, best_conf, None
 
     x1, y1, x2, y2 = boxes.xyxy[best_index].tolist()
-    return (int(x1), int(y1), int(x2), int(y2)), best_conf
+    class_id = int(boxes.cls[best_index].item())
+    return (int(x1), int(y1), int(x2), int(y2)), best_conf, class_id
+
+
+def choose_best_box_in_roi(result, roi: tuple[int, int, int, int], min_conf: float) -> tuple[tuple[int, int, int, int] | None, float, int | None]:
+    boxes = result.boxes
+    if boxes is None or len(boxes) == 0:
+        return None, 0.0, None
+
+    best_box = None
+    best_conf = 0.0
+    best_class_id = None
+
+    rx1, ry1, rx2, ry2 = roi
+
+    for i in range(len(boxes)):
+        conf = float(boxes.conf[i].item())
+        if conf < min_conf:
+            continue
+
+        x1, y1, x2, y2 = boxes.xyxy[i].tolist()
+        bcx = (x1 + x2) // 2
+        bcy = (y1 + y2) // 2
+
+        # Sprawdzamy czy środek wykrytego boxa leży wewnątrz ROI
+        if rx1 <= bcx <= rx2 and ry1 <= bcy <= ry2:
+            if conf > best_conf:
+                best_conf = conf
+                best_box = (int(x1), int(y1), int(x2), int(y2))
+                best_class_id = int(boxes.cls[i].item())
+
+    return best_box, best_conf, best_class_id
+
+
+def normalize_label(label: str) -> str:
+    label_lower = label.lower()
+    if label_lower == "scissor":
+        return "scissors"
+    return label_lower
 
 
 def classify_crop(classifier: YOLO, crop, device: str, imgsz: int) -> tuple[str, float]:
@@ -192,10 +265,10 @@ def draw_overlay(
         else:
             debug_line_3 = "ROI: -"
         cv2.putText(frame, debug_line_3, (20, 200), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (180, 180, 180), 2)
-        debug_line_4 = f"Detector: {detector_name}"
-        cv2.putText(frame, debug_line_4, (20, 230), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (160, 160, 160), 2)
-        debug_line_5 = f"Classifier: {classifier_name}"
-        cv2.putText(frame, debug_line_5, (20, 255), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (160, 160, 160), 2)
+        detector_name = f"Detector: {detector_name}"
+        cv2.putText(frame, detector_name, (20, 230), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (160, 160, 160), 2)
+        classifier_name = f"Classifier: {classifier_name}"
+        cv2.putText(frame, classifier_name, (20, 255), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (160, 160, 160), 2)
     cv2.putText(
         frame,
         "Q: quit",
@@ -210,22 +283,28 @@ def draw_overlay(
 def main() -> int:
     args = parse_args()
     root_dir = Path(__file__).resolve().parent.parent
-    classifier_path = args.classifier_model or resolve_latest_best(
-        root_dir, "runs/classify*/**/weights/best.pt"
-    )
 
     fallback_roi_enabled = not args.no_fallback_roi
 
-    detector = None
-    detector_name = "-"
-    if not args.fixed_roi_only:
-        detector_path = args.detector_model or resolve_latest_best(
-            root_dir, "runs/detect*/**/weights/best.pt"
-        )
-        detector = YOLO(detector_path)
-        detector_name = detector_path.name
-    classifier = YOLO(classifier_path)
-    classifier_name = classifier_path.name
+    # 1. Załadowanie detektora (zawsze ładowany, bo filtrujemy nim również w ROI)
+    detector_path = args.detector_model or resolve_latest_best(
+        root_dir, "runs/detect*/**/weights/best.pt"
+    )
+    detector = YOLO(detector_path)
+    detector_name = detector_path.name
+
+    # 2. Załadowanie klasyfikatora (tylko gdy użytkownik jawnie go zażąda)
+    classifier = None
+    classifier_name = "-"
+    if args.use_classifier:
+        try:
+            classifier_path = args.classifier_model or resolve_latest_best(
+                root_dir, "runs/classify*/**/weights/best.pt"
+            )
+            classifier = YOLO(classifier_path)
+            classifier_name = classifier_path.name
+        except FileNotFoundError:
+            print("Uwaga: Nie znaleziono modelu klasyfikacyjnego. Gesty będą klasyfikowane wyłącznie przez detektor.")
 
     capture = cv2.VideoCapture(args.camera_index)
     if not capture.isOpened():
@@ -239,6 +318,10 @@ def main() -> int:
     raw_label: str | None = None
     raw_conf: float | None = None
 
+    # Zmienne przechowujące ostatnie predykcje z detektora dla klatek, w których nie uruchamiamy detekcji
+    last_detector_label: str | None = None
+    last_detector_conf = 0.0
+
     try:
         while True:
             ok, frame = capture.read()
@@ -249,47 +332,89 @@ def main() -> int:
             frame_index += 1
             frame_h, frame_w = frame.shape[:2]
 
+            detected_class_id = None
+
             if args.fixed_roi_only:
-                current_box = centered_square_roi(frame_w, frame_h, args.roi_size)
+                current_box = centered_square_roi(frame_w, frame_h, args.roi_size, args.roi_x_center)
                 current_detect_conf = 0.0
                 using_fallback_roi = True
+
+                # Stałe ROI: Uruchamiamy detektor na całym kadrze i szukamy rąk tylko wewnątrz stałego kwadratu
+                if frame_index % args.detect_every == 1 or last_detector_label is None:
+                    detect_result = detector.predict(
+                        source=frame,
+                        imgsz=args.detect_imgsz,
+                        device=args.device,
+                        verbose=False,
+                    )[0]
+                    box, detect_conf, class_id = choose_best_box_in_roi(detect_result, current_box, args.min_detect_conf)
+                    if box is not None:
+                        label_name = detector.names[class_id]
+                        last_detector_label = normalize_label(label_name)
+                        last_detector_conf = detect_conf
+                    else:
+                        last_detector_label = None
+                        last_detector_conf = 0.0
             elif frame_index % args.detect_every == 1 or current_box is None:
+                # Normalne wykrywanie na pełnym kadrze
                 detect_result = detector.predict(
                     source=frame,
                     imgsz=args.detect_imgsz,
                     device=args.device,
                     verbose=False,
                 )[0]
-                box, detect_conf = choose_best_box(detect_result, args.min_detect_conf)
+                box, detect_conf, class_id = choose_best_box(detect_result, args.min_detect_conf)
                 if box is not None:
                     current_box = expand_box(box, frame_w, frame_h, args.crop_margin)
                     current_detect_conf = detect_conf
                     using_fallback_roi = False
+                    detected_class_id = class_id
+                    
+                    label_name = detector.names[class_id]
+                    last_detector_label = normalize_label(label_name)
+                    last_detector_conf = detect_conf
                 elif fallback_roi_enabled:
-                    current_box = centered_square_roi(frame_w, frame_h, args.roi_size)
+                    current_box = centered_square_roi(frame_w, frame_h, args.roi_size, args.roi_x_center)
                     current_detect_conf = 0.0
                     using_fallback_roi = True
+                    detected_class_id = None
+                    last_detector_label = None
+                    last_detector_conf = 0.0
                 else:
                     current_box = None
                     current_detect_conf = detect_conf
                     using_fallback_roi = False
+                    detected_class_id = None
+                    last_detector_label = None
+                    last_detector_conf = 0.0
 
             stable_label = None
             stable_conf = None
             raw_label = None
             raw_conf = None
+
             if current_box is not None:
-                x1, y1, x2, y2 = current_box
-                crop = frame[y1:y2, x1:x2]
-                if crop.size > 0:
-                    label, confidence = classify_crop(
-                        classifier, crop, args.device, args.classify_imgsz
-                    )
-                    raw_label = label
-                    raw_conf = confidence
-                    history.append((label, confidence))
+                # Decydujemy czy używamy klasyfikatora (dwuetapowego) czy detektora bezpośrednio
+                if classifier is not None and args.use_classifier:
+                    x1, y1, x2, y2 = current_box
+                    crop = frame[y1:y2, x1:x2]
+                    if crop.size > 0:
+                        label, confidence = classify_crop(
+                            classifier, crop, args.device, args.classify_imgsz
+                        )
+                        raw_label = normalize_label(label)
+                        raw_conf = confidence
+                        history.append((raw_label, confidence))
+                    else:
+                        history.clear()
                 else:
-                    history.clear()
+                    # Klasyfikacja bezpośrednio z detektora YOLO (Rozwiązanie 1)
+                    if last_detector_label is not None:
+                        raw_label = last_detector_label
+                        raw_conf = last_detector_conf
+                        history.append((raw_label, raw_conf))
+                    else:
+                        history.clear()
             else:
                 history.clear()
 
